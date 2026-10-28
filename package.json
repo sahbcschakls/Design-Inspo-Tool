@@ -1,0 +1,26 @@
+{
+  "name": "inspo-library",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local design inspiration library that turns a folder of references into a Claude-ready style guide.",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "mcp": "node mcp/server.js"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "chokidar": "^3.6.0",
+    "dotenv": "^18.0.9",
+    "express": "^4.22.3",
+    "zod": "^4.6.7"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.35.5"
+  }
+}

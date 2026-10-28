@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inspo Library</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%23FF4A1C'/><path d='M16 2a14 14 0 0 1 0 28z' fill='%23161513'/></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Schibsted+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <script>
+    try {
+      const t = localStorage.getItem('inspo-theme');
+      if (t) document.documentElement.dataset.theme = t;
+    } catch {}
+  </script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <aside class="rail">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true"></span>
+      <div>
+        <div class="brand__name">Inspo</div>
+        <div class="brand__sub mono" id="brandCount">Library</div>
+      </div>
+    </div>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab is-active" data-view="library" role="tab">Library</button>
+      <button class="tab" data-view="taste" role="tab">Taste</button>
+      <button class="tab" data-view="connect" role="tab">Connect Claude</button>
+    </nav>
+
+    <div class="filters" id="filters"></div>
+
+    <div class="rail__foot">
+      <button class="folder" id="folderBtn" title="Library folder — click to change">
+        <span class="mono label">Folder</span>
+        <span class="folder__path" id="folderPath">—</span>
+      </button>
+      <div class="rail__row">
+        <button class="ghost" id="settingsBtn">Settings</button>
+        <button class="ghost icon" id="themeBtn" title="Toggle theme" aria-label="Toggle theme"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 2a8 8 0 0 1 0 16z" fill="currentColor"/></svg></button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="ghost icon menu-btn" id="menuBtn" aria-label="Filters">☰</button>
+      <label class="search">
+        <span aria-hidden="true">⌕</span>
+        <input id="search" type="search" placeholder="Search styles, tags, colours, fonts…" autocomplete="off" />
+        <kbd class="mono">/</kbd>
+      </label>
+      <div class="topbar__right">
+        <label class="select">
+          <span class="mono label">Sort</span>
+          <select id="sort">
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="name">Style name A–Z</option>
+            <option value="type">Type</option>
+            <option value="analysed">Recently analysed</option>
+            <option value="favorites">Favourites first</option>
+            <option value="color">Colour</option>
+          </select>
+        </label>
+        <div class="density" role="group" aria-label="Card size">
+          <button data-density="s" title="Small">S</button>
+          <button data-density="m" title="Medium">M</button>
+          <button data-density="l" title="Large">L</button>
+        </div>
+        <button class="btn" id="analyzeBtn" hidden>Analyse <span id="pendingCount">0</span></button>
+        <label class="btn btn--ink" for="fileInput">＋ Add references</label>
+        <input type="file" id="fileInput" accept="image/*" multiple hidden />
+      </div>
+    </header>
+
+    <section class="view" id="view-library">
+      <div class="statusline mono" id="statusline"></div>
+      <div class="grid" id="grid"></div>
+      <div class="empty" id="empty" hidden></div>
+    </section>
+
+    <section class="view" id="view-taste" hidden></section>
+    <section class="view" id="view-connect" hidden></section>
+  </main>
+
+  <div class="tray" id="tray" hidden></div>
+
+  <dialog class="detail" id="detail"></dialog>
+  <dialog class="settings" id="settings"></dialog>
+
+  <div class="drop" id="drop" hidden>
+    <div class="drop__inner">
+      <div class="drop__title">Drop to add to your library</div>
+      <div class="mono" id="dropTarget"></div>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
