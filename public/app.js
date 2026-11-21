@@ -31,7 +31,40 @@ const state = {
 // ---------- API ----------
 // The hosted web view (npm run site:build) has no server: it reads a snapshot from
 // /data/library.json and builds briefs in the browser with the same modules the server uses.
-const STATIC = Boolean(window.INSPO_STATIC);
+let STATIC = Boolean(window.INSPO_STATIC);
+
+function enableStatic() {
+  STATIC = true;
+  document.body.classList.add('is-static');
+  $('#folderBtn .label').textContent = 'Web view · read-only';
+}
+
+// When the page is hosted without the local server (e.g. a static host that skipped the
+// web-view build), fall back to the snapshot if there is one, otherwise explain what to do.
+async function loadLibrary() {
+  if (STATIC) return staticApi('/api/library');
+  try {
+    return await api('/api/library');
+  } catch (err) {
+    const probe = await fetch('/data/library.json', { cache: 'no-cache' }).catch(() => null);
+    if (probe?.ok && probe.headers.get('content-type')?.includes('json')) {
+      snapshot = await probe.json();
+      enableStatic();
+      return staticApi('/api/library');
+    }
+    throw Object.assign(new Error('Could not load the library.'), { fatal: true, cause: err });
+  }
+}
+
+function showFatal(err) {
+  const el = $('#empty');
+  el.hidden = false;
+  el.innerHTML = `
+    <h2>The library could not load.</h2>
+    <p>This page needs either the local app (<code>npm start</code> on your computer) or the hosted web-view build.</p>
+    <p>If this is a Vercel deployment: make sure it builds the branch that contains <code>vercel.json</code> (Project → Settings → Git → Production Branch), then redeploy. The build log should end with “Built the web view into dist/”.</p>
+    <p class="mono label">${esc(err.cause?.message || err.message)}</p>`;
+}
 const READ_ONLY = 'This is the read-only web view. Add and edit references in the local app.';
 let snapshot = null;
 const picked = () => new Set(JSON.parse(store.get('inspo-picked', '[]')));
@@ -79,7 +112,7 @@ async function api(path, opts = {}) {
 }
 
 async function refresh() {
-  const data = await api('/api/library');
+  const data = await loadLibrary();
   Object.assign(state, { styles: data.styles, kits: data.kits || [], stats: data.stats, taste: data.taste, config: data.config, queue: data.queue, loaded: true });
   renumber();
   render();
@@ -1323,9 +1356,5 @@ function connectEvents() {
   es.onerror = () => {};
 }
 
-if (STATIC) {
-  document.body.classList.add('is-static');
-  $('#folderBtn .label').textContent = 'Web view · read-only';
-}
-refresh().catch(fail);
-connectEvents();
+if (STATIC) enableStatic();
+refresh().then(connectEvents, (err) => (state.loaded ? fail(err) : showFatal(err)));

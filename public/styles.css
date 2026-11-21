@@ -639,3 +639,4 @@ textarea.notes:focus, .field input:focus, .field textarea:focus, .field select:f
 .is-static label[for='fileInput'], .is-static #analyzeBtn, .is-static #settingsBtn, .is-static [data-kit-new],
 .is-static .kit .iconbtn[data-kit-edit], .is-static .detail__org, .is-static [data-rebuild] { display: none !important; }
 .is-static .folder { cursor: default; }
+.shero:empty { display: none; }
