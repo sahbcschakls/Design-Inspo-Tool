@@ -16,6 +16,8 @@ export function analysisRequest(style, images, { notes } = {}) {
     style.collection ? `Collection folder: ${style.collection}` : null,
     style.width ? `Size: ${style.width}×${style.height}px` : null,
     style.localColors?.length ? `Dominant pixel colours (measured): ${style.localColors.map((c) => c.hex).join(' ')}` : null,
+    style.sourceUrl ? `Source: ${style.sourceUrl}` : null,
+    style.instructions ? `Curator instructions (follow these — they say what to take from this reference): ${style.instructions}` : null,
     notes || style.notes ? `Designer's notes about this reference: ${notes || style.notes}` : null,
   ].filter(Boolean).join('\n');
   return [
@@ -25,7 +27,8 @@ export function analysisRequest(style, images, { notes } = {}) {
 }
 
 export class Analyzer {
-  constructor({ store, libraryDir, getConfig, onExportsChanged, concurrency = 2 }) {
+  constructor({ store, libraryDir, getConfig, onExportsChanged, onAnalysed, concurrency = 2 }) {
+    this.onAnalysed = onAnalysed;
     this.store = store;
     this.libraryDir = libraryDir;
     this.getConfig = getConfig;
@@ -94,6 +97,7 @@ export class Analyzer {
         analyzedAt: new Date().toISOString(),
       });
       this.onExportsChanged?.();
+      this.onAnalysed?.(id);
     } catch (err) {
       if (this.stopped) return;
       let message = err?.message || String(err);

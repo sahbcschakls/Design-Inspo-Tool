@@ -1,8 +1,9 @@
 // The shape of one analysed reference. Used for Claude's structured output,
 // the MCP save tool, and for validating edits from the UI.
+import { SECTION_IDS, FACETS, MEDIA } from './sections.js';
 
 export const TYPES = [
-  'Web Design', 'Landing Page', 'Mobile App', 'Dashboard', 'UI Component',
+  'Web Design', 'Landing Page', 'Mobile App', 'Dashboard', 'UI Component', 'Presentation',
   'Branding', 'Logo', 'Typography', 'Poster', 'Editorial', 'Packaging',
   'Illustration', 'Photography', '3D', 'Motion', 'Iconography', 'Pattern', 'Other',
 ];
@@ -14,12 +15,15 @@ export const ANALYSIS_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: [
-    'styleName', 'type', 'description', 'summary', 'tags', 'mood', 'colors', 'typography',
+    'styleName', 'type', 'section', 'facets', 'bestFor', 'description', 'summary', 'tags', 'mood', 'colors', 'typography',
     'layout', 'composition', 'visualElements', 'tokens', 'principles', 'doUse', 'avoid', 'promptSnippet',
   ],
   properties: {
     styleName: str('An evocative, specific 2–4 word name for this visual style, e.g. "Swiss Grid Brutalism", "Soft Chrome Y2K", "Quiet Luxury Editorial". Title Case.'),
     type: { type: 'string', enum: TYPES, description: 'What kind of design artefact this is.' },
+    section: { type: 'string', enum: SECTION_IDS, description: 'Which library section this belongs in: web, mobile, presentation, illustration, typography, or misc (branding, posters, packaging, photography…).' },
+    facets: { type: 'array', items: { type: 'string', enum: FACETS }, description: '1–4 aspects this reference is especially worth borrowing (e.g. its typography, its illustration style, its layout).' },
+    bestFor: { type: 'array', items: { type: 'string', enum: MEDIA }, description: '1–4 media this style would execute well in.' },
     description: str('One or two sentences (max ~35 words) capturing what makes this reference distinctive.'),
     summary: str('A richer paragraph (60–120 words) explaining the style, its feel, and why it works.'),
     tags: strList('5–10 lowercase style keywords, e.g. "brutalist", "grain", "monochrome", "oversized type".'),
@@ -101,6 +105,10 @@ export function cleanAnalysis(input = {}) {
   for (const key of ['visualElements', 'principles', 'doUse', 'avoid']) {
     if (key in input) out[key] = asList(input[key]);
   }
+  if ('section' in input) out.section = SECTION_IDS.includes(input.section) ? input.section : null;
+  if ('facets' in input) out.facets = asList(input.facets, 8).map((t) => t.toLowerCase()).filter((t) => FACETS.includes(t));
+  if ('bestFor' in input) out.bestFor = asList(input.bestFor, 8).map((t) => t.toLowerCase()).filter((t) => MEDIA.includes(t));
+  if ('sourceUrl' in input) out.sourceUrl = /^https?:\/\//i.test(String(input.sourceUrl || '').trim()) ? asString(input.sourceUrl, 600) : '';
   if ('tags' in input) out.tags = asList(input.tags).map((t) => t.toLowerCase());
   if ('mood' in input) out.mood = asList(input.mood, 8).map((t) => t.toLowerCase());
   if ('colors' in input && Array.isArray(input.colors)) {

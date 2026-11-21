@@ -9,6 +9,8 @@ import { Store } from './store.js';
 import { Analyzer } from './analyzer.js';
 import { isImage, probe, makeThumb, extractPalette } from './images.js';
 import { writeExports } from './taste.js';
+import { INBOX, SECTIONS } from './sections.js';
+import { SIDECAR_EXTS, readSidecar, imageForSidecar, fileFromInbox } from './organize.js';
 
 const hashFile = (file) =>
   new Promise((resolve, reject) => {
@@ -17,6 +19,18 @@ const hashFile = (file) =>
   });
 
 const toPosix = (p) => p.split(path.sep).join('/');
+
+const INBOX_README = `# Inbox
+
+Dump new inspiration here: screenshots, Pinterest saves, exports of your own work.
+
+- Add instructions for a reference in a file with the same name: \`hero.png\` + \`hero.md\`
+  ("url: https://…" on its own line records the source; everything else is instructions,
+  e.g. "take the illustration style only, ignore the colours").
+- Links: put them in \`links.txt\` (one per line, optional " | instructions") and ask Claude to
+  "process my inspo inbox" — it captures them, analyses everything, and files each reference into
+  web/, mobile/, presentation/, illustration/, typography/ or misc/.
+`;
 
 export class Library {
   constructor(getConfig) {
@@ -32,6 +46,7 @@ export class Library {
       libraryDir: this.dir,
       getConfig,
       onExportsChanged: () => this.scheduleExports(),
+      onAnalysed: (id) => this.maybeFile(id),
     });
     this.byPath = new Map(); // relative path -> id
     this.slots = 4; // concurrent ingests (hashing + thumbnails)
@@ -49,6 +64,10 @@ export class Library {
   }
 
   async start() {
+    // The folder skeleton: an inbox to dump things in, plus one folder per section.
+    for (const dir of [INBOX, ...SECTIONS.map((x) => x.folder)]) fs.mkdirSync(path.join(this.dir, dir), { recursive: true });
+    const howto = path.join(this.dir, INBOX, 'README.md');
+    if (!fs.existsSync(howto)) fs.writeFileSync(howto, INBOX_README);
     // Anything left "analyzing" by a previous crash goes back to the queue.
     await this.store.mutate((data) => {
       for (const s of Object.values(data.styles)) {
@@ -65,8 +84,12 @@ export class Library {
     });
     const seen = new Set();
     this.watcher
-      .on('add', (file) => { seen.add(file); this.ingest(file).catch((e) => console.error('[inspo] ingest failed', file, e.message)); })
-      .on('change', (file) => this.ingest(file, { changed: true }).catch(() => {}))
+      .on('add', (file) => {
+        seen.add(file);
+        if (this.isSidecar(file)) return this.onSidecar(file);
+        this.ingest(file).catch((e) => console.error('[inspo] ingest failed', file, e.message));
+      })
+      .on('change', (file) => (this.isSidecar(file) ? this.onSidecar(file) : this.ingest(file, { changed: true }).catch(() => {})))
       .on('unlink', (file) => this.markMissing(file))
       .on('ready', async () => {
         this.ready = true;
@@ -77,8 +100,32 @@ export class Library {
           }
         });
         this.queuePending();
+        // Inbox items that were analysed while the app was closed (e.g. over MCP).
+        for (const st of this.store.list()) if (st.collection === INBOX && st.status === 'ready') this.maybeFile(st.id);
         this.scheduleExports();
       });
+  }
+
+  isSidecar(file) {
+    return SIDECAR_EXTS.includes(path.extname(file).toLowerCase()) && !/^(readme|instructions)\./i.test(path.basename(file));
+  }
+
+  // A sidecar (.md/.txt next to an image) was added or edited: attach it to the image.
+  async onSidecar(file) {
+    const img = imageForSidecar(file, isImage);
+    if (!img) return;
+    const id = this.byPath.get(toPosix(path.relative(this.dir, img)));
+    if (!id || !this.store.get(id)) return;
+    const side = readSidecar(img);
+    await this.store.update(id, { instructions: side.instructions, ...(side.sourceUrl ? { sourceUrl: side.sourceUrl } : {}) }).catch(() => {});
+  }
+
+  maybeFile(id) {
+    const config = this.getConfig();
+    if (!config.autoOrganize) return;
+    fileFromInbox({ libraryDir: this.dir, store: this.store, id })
+      .then((rel) => { if (rel) { this.byPath.set(rel, id); console.log(`[inspo] filed ${rel}`); } })
+      .catch((e) => console.error('[inspo] could not file', id, e.message));
   }
 
   async stop() {
@@ -125,7 +172,10 @@ export class Library {
         Object.assign(existing, { file: rel, fileName: path.basename(rel), collection, missing: false, size: stat.size });
         return false;
       }
+      const side = readSidecar(absFile);
       data.styles[id] = {
+        instructions: side.instructions,
+        sourceUrl: side.sourceUrl,
         status: 'pending',
         favorite: false,
         pinned: false,
@@ -190,7 +240,7 @@ export class Library {
     this.exportTimer = setTimeout(() => {
       try {
         const data = this.store.read();
-        writeExports(this.dataDir, this.store.list(), data.taste);
+        writeExports(this.dataDir, this.store.list(), data.taste, Object.values(data.kits || {}));
       } catch (e) {
         console.error('[inspo] failed to write exports', e.message);
       }

@@ -2,7 +2,9 @@
 // files written into <folder>/.inspo/ so Claude Code can @-reference them.
 import fs from 'node:fs';
 import path from 'node:path';
-import { styleColors, styleToMarkdown, tasteToMarkdown, bundlePrompt } from './prompts.js';
+import { styleColors, styleToMarkdown, tasteToMarkdown, bundlePrompt, kitToMarkdown, indexMarkdown } from './prompts.js';
+import { sectionOf } from './sections.js';
+import { PLAYBOOKS, playbookMarkdown } from './playbooks.js';
 import { createClient, withFallback } from './claude.js';
 
 function count(values) {
@@ -40,6 +42,8 @@ export function computeStats(styles) {
     pending: styles.filter((s) => s.status === 'pending' || s.status === 'analyzing').length,
     pinned: styles.filter((s) => s.pinned).length,
     types: count(styles.map((s) => s.type)),
+    sections: count(styles.map((s) => sectionOf(s))),
+    facets: count(styles.flatMap((s) => s.facets || [])),
     collections: count(styles.map((s) => s.collection)),
     tags: count(styles.flatMap((s) => s.tags || [])),
     moods: count(styles.flatMap((s) => s.mood || [])),
@@ -95,7 +99,7 @@ export async function synthesiseTaste(styles, config) {
 const slug = (s) => String(s || 'style').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'style';
 
 // Writes TASTE.md, ACTIVE.md and one Markdown file per style into <folder>/.inspo/.
-export function writeExports(dataDir, styles, taste) {
+export function writeExports(dataDir, styles, taste, kits = []) {
   const stats = computeStats(styles);
   const exportDir = path.join(dataDir, 'styles');
   fs.mkdirSync(exportDir, { recursive: true });
@@ -109,6 +113,22 @@ export function writeExports(dataDir, styles, taste) {
       ? bundlePrompt(active, { taste })
       : '# Active styles\n\nNo styles are active. Click "Add to Claude" on a card in the Inspo Library to activate one.\n'
   );
+
+  fs.writeFileSync(path.join(dataDir, 'INDEX.md'), indexMarkdown(styles, kits));
+
+  const playDir = path.join(dataDir, 'playbooks');
+  fs.mkdirSync(playDir, { recursive: true });
+  for (const medium of Object.keys(PLAYBOOKS)) fs.writeFileSync(path.join(playDir, `${medium}.md`), playbookMarkdown(medium) + '\n');
+
+  const kitDir = path.join(dataDir, 'kits');
+  fs.mkdirSync(kitDir, { recursive: true });
+  const keepKits = new Set();
+  for (const k of kits) {
+    const name = `${slug(k.name)}-${k.id.slice(0, 6)}.md`;
+    keepKits.add(name);
+    fs.writeFileSync(path.join(kitDir, name), kitToMarkdown(k, styles));
+  }
+  for (const f of fs.readdirSync(kitDir)) if (f.endsWith('.md') && !keepKits.has(f)) fs.rmSync(path.join(kitDir, f), { force: true });
 
   const keep = new Set();
   for (const s of styles.filter((x) => x.status === 'ready')) {

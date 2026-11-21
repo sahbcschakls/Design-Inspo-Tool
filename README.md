@@ -1,125 +1,95 @@
-# Inspo Library
+# Inspo
 
-A local inspiration library for your design references. Point it at a folder on your computer and drop images in. Each one becomes a catalogued **style card**: style name, type, short description, colour palette, typography, layout notes, design tokens and do/avoid rules. Claude then builds a **taste profile** from the whole library.
-
-The main feature is the **Add to Claude** button. Tap it on any card and that style becomes live art direction for Claude through MCP. After that you can ask Claude for “a pricing page” and it already knows how you want it to look. You don't need to paste references or explain your taste.
+A visual design library that also does the execution. Dump references into a folder (Pinterest saves, screenshots, websites, your own work). Each one becomes a **style**: palette, type, layout, tokens and do/avoid rules. Styles combine into **kits** aimed at a medium, and any kit or style turns into a finished deliverable (Figma frames, a web page, app screens, a slide deck, a poster, illustrations) once you add the content.
 
 ```
- your folder ──watch──▶ Inspo Library (localhost:4545) ──MCP──▶ Claude Desktop / Claude Code
-  └─ drop images          cards · filters · taste · tray          get_design_brief, search_styles…
+ _inbox/ ──▶ Claude reads it ──▶ style card, filed into a section ──▶ kits ──▶ "use my Pitch deck kit for this outline"
+  + .md instructions        web · mobile · presentation · illustration · typography · misc        ──▶ finished deck / page / screen / graphic
 ```
 
 ## Quick start
 
-Requirements: [Node.js 18.17+](https://nodejs.org).
+Requires [Node.js 18.17+](https://nodejs.org).
 
 ```bash
-git clone <this repo> inspo-library
-cd inspo-library
 npm install
-cp .env.example .env      # then edit INSPO_DIR (and optionally ANTHROPIC_API_KEY)
-npm start
+cp .env.example .env          # set INSPO_DIR to your inspo folder (and optionally ANTHROPIC_API_KEY)
+npm start                     # → http://localhost:4545
+npm run skill:install         # makes the "inspo" skill available in every Claude Code project
 ```
 
-Open **http://localhost:4545**. You can also change the folder and API key later in **Settings** inside the app.
-
-## Adding references
-
-You can add references in any of these ways:
-
-- **Save images into your folder.** Sub-folders become **collections** (e.g. `Inspo/Web`, `Inspo/Posters`).
-- **Drag and drop** images anywhere on the page, **paste** a screenshot (Ctrl/⌘+V), or click **＋ Add references**.
-
-Supported formats are JPG, PNG, WebP, GIF, AVIF, SVG, TIFF and HEIC. Images are identified by their content, so renaming or moving a file inside the folder keeps its analysis, and an exact duplicate is skipped.
-
-## How references get analysed
-
-There are two options. Use whichever suits you:
-
-1. **Automatically, with an API key.** Add an Anthropic API key in Settings (or `ANTHROPIC_API_KEY` in `.env`). Every new image is sent to Claude, which returns a structured style analysis. The default model is Claude Opus 5.5, and you can switch models in Settings. Requests use server-side refusal fallback (`fallbacks: "default"`), so a rare safety decline is retried on a fallback model instead of failing.
-2. **Through Claude Desktop or Claude Code, with no API key.** Connect the MCP server (below) and say *“analyse my new references and save them to my inspo library”*. Claude looks at each image and saves the analysis itself.
-
-You can also edit any card by hand: name, type, colours, fonts, keywords and prompt.
-
-## Connecting Claude (MCP)
-
-The **Connect Claude** tab inside the app shows these commands with the exact paths for your machine, ready to copy.
-
-**Claude Desktop:** go to Settings → Developer → Edit Config and add:
-
-```json
-{
-  "mcpServers": {
-    "inspo": {
-      "command": "node",
-      "args": ["/absolute/path/to/inspo-library/mcp/server.js"]
-    }
-  }
-}
-```
-
-**Claude Code:**
+Then connect the MCP server (the **Connect Claude** tab shows the exact command for your machine):
 
 ```bash
-claude mcp add inspo --scope user -- node /absolute/path/to/inspo-library/mcp/server.js
+claude mcp add inspo --scope user -- node /absolute/path/to/this/repo/mcp/server.js
 ```
 
-Restart Claude. The server tells Claude to call `get_design_brief` before any design work.
+## The folder
 
-| Tool | What it does |
+On start the app creates this structure inside your inspo folder:
+
+```
+Inspo/
+  _inbox/              ← dump anything here
+    hero.png
+    hero.md            ← optional: "url: https://…" + instructions ("take the illustration style only")
+    links.txt          ← optional: one URL per line, "| instructions" after it
+  web/  mobile/  presentation/  illustration/  typography/  misc/
+  .inspo/              ← generated: library.json, INDEX.md, styles/, kits/, playbooks/, TASTE.md, ACTIVE.md
+```
+
+Once a reference in `_inbox` is analysed, it is filed into its section folder together with its instructions file. You can also save straight into a section folder, or drag images onto the app (they go into the section you're viewing, or the inbox).
+
+## Three ways it gets processed
+
+1. **In the app, automatically.** Add an Anthropic API key in Settings. New images are analysed as they arrive and filed out of the inbox.
+2. **From Claude Code or Claude Desktop.** Say *"process my inspo inbox"*. The skill captures any links, reads each image and its instructions, saves the styles, files them, and suggests kits. No API key needed.
+3. **By hand.** Edit any card in the app.
+
+## Using it
+
+- **Gallery.** Sections in the sidebar (number keys `0`–`6` jump between them). Each section opens with a hero built from that section's own palette. Filter by what's worth borrowing (typography, illustration, layout…), type, colour, mood or keyword. Cards tilt under the cursor; click one for the full art direction.
+- **⌘K.** Jump to any style, kit, section or action.
+- **Kits.** Combine styles with roles: *primary*, *layout*, *typography*, *color*, *illustration*, *imagery*, *iconography*, *components*, *texture*, *motion*. Example: "Pitch deck" = Forest Editorial Deck (primary) + Sunny Blob Spot Art (illustration) + Heavy Condensed Specimen (typography).
+- **Execute.** On a kit, a style, or your active styles. Pick a medium, paste the content, and copy a brief that contains the art direction, merged design tokens (CSS variables / JSON) and a step-by-step playbook for that medium. In Claude Code you can skip the copying: *"use my Pitch deck kit to make slides from this outline"*.
+- **Taste.** A profile of what you consistently like across the library, which Claude applies by default.
+
+## Claude integration
+
+| Piece | What it gives Claude |
 | --- | --- |
-| `get_design_brief` | Returns your active styles (the ones you pressed **Add to Claude** on) with images, plus your taste profile |
-| `get_design_taste` | Returns the synthesised taste profile |
-| `search_styles` / `get_style` | Find a style by keyword, colour, font, type or collection and pull its full art direction plus image |
-| `set_style_active` | Activate or deactivate a style from the chat |
-| `list_unanalyzed` / `save_style_analysis` | Let Claude catalogue new references without an API key |
-| `save_taste_profile` | Let Claude write your taste profile without an API key |
+| **Skill** (`.claude/skills/inspo`) | The workflow: ingest the inbox, file references, curate kits, execute per medium, self-check against the style. Active automatically inside this repo; `npm run skill:install` makes it global. |
+| **MCP server** (`mcp/server.js`) | `get_execution_brief`, `list_kits`, `save_kit`, `search_styles` (by section/facet), `get_style`, `list_unanalyzed`, `save_style_analysis`, `get_design_brief`, `save_taste_profile`, `set_style_active` |
+| **CLI** (`npm run inspo -- <cmd>`) | The same operations without MCP: `where`, `pending`, `save`, `search`, `kits`, `kit`, `brief`, `export` |
+| **Markdown exports** (`.inspo/`) | `INDEX.md` (one line per style), `styles/*.md`, `kits/*.md`, `playbooks/*.md`, `TASTE.md`, `ACTIVE.md` for any tool that can read files |
 
-Resources `inspo://taste` and `inspo://active`, and the prompt `design-with-my-taste`, are also available.
+Capturing links needs Playwright once: `npm i -D playwright && npx playwright install chromium`, then `npm run capture -- <url> "instructions"` (Pinterest pins save the pin image; other sites save a screenshot; add `--full` for a full-page shot).
 
-**Without MCP:** **Add to Claude** also copies the full brief to your clipboard, so you can paste it into claude.ai or any other tool. The library also keeps Markdown files up to date in `<folder>/.inspo/`:
+## Why a folder rather than Figma as the source of truth
 
-- `TASTE.md`: your taste profile
-- `ACTIVE.md`: the brief for your currently active styles
-- `styles/*.md`: one file per style
-
-In Claude Code you can reference these directly, e.g. `@~/Pictures/Inspo/.inspo/ACTIVE.md`.
-
-## The app
-
-- **Library:** a masonry grid of cards showing the image, catalogue number, type, style name, description, palette (click a swatch to copy its hex), typography, keywords, **Add to Claude** and copy-prompt buttons. You can sort by newest, oldest, name, type, recently analysed, favourites or colour, and filter by collection, type, colour family, mood, keyword, favourites, active styles, or references still needing analysis. Search covers names, tags, hex codes and fonts. Card size has S, M and L options.
-- **Detail view:** click a card to see the full image (zoomable) with an overview, palette, a typography specimen (loads Google Fonts alternatives), layout and composition notes, tokens, signature details, principles, do/avoid, the prompt, and your own notes (Claude sees these too). From here you can edit, re-analyse, show the file in its folder, or remove it (the file is moved to `.inspo/trash`, never deleted). Use ← → to step through cards.
-- **Taste:** shows your recurring palette, signature traits, colour, type and layout tendencies, always/never rules, what you collect, and your vocabulary.
-- **Tray:** when styles are active, a floating bar shows them with **Copy brief** and **Clear** buttons.
-- Light and dark themes, live updates when the folder changes, and it works on phone-sized screens.
-
-## Where data lives
-
-Everything stays on your computer:
-
-- `<folder>/.inspo/library.json` holds all analysis and metadata. It travels with the folder.
-- `<folder>/.inspo/thumbs/` holds the generated thumbnails.
-- `config.local.json` (in this project) holds settings saved from the app, including your API key. It is git-ignored.
-
-The web server only listens on `127.0.0.1`.
+The folder plus `library.json` is what Claude reads and writes reliably: plain files, versionable, readable without any connector. Figma is a better *output* than a database. Use the `figma` medium to execute kits into a Figma file, or ask Claude to lay out a kit as a moodboard page there. If you keep a Figma file of inspo, export frames into `_inbox/` and they join the library like anything else.
 
 ## Configuration
 
 | Variable | Default | |
 | --- | --- | --- |
-| `INSPO_DIR` | `./library` | Your references folder (`~` is supported) |
-| `ANTHROPIC_API_KEY` | — | Enables automatic analysis |
-| `INSPO_MODEL` | `claude-opus-5-5` | Model used for analysis and taste |
+| `INSPO_DIR` | `./library` | Your inspo folder (`~` supported) |
+| `ANTHROPIC_API_KEY` | — | Enables automatic analysis in the app |
+| `INSPO_MODEL` | `claude-opus-5-5` | Model for analysis and taste |
 | `AUTO_ANALYZE` | `true` | Analyse new images as they arrive |
+| `AUTO_ORGANIZE` | `true` | File analysed inbox items into their section folder |
 | `PORT` | `4545` | Web UI port |
 
-`sharp` is an optional dependency used for thumbnails, colour extraction and resizing. If it fails to install on your platform the app still runs. It just serves original images and skips the local colour extraction.
+Settings saved in the app go to `config.local.json` (git-ignored). The server only listens on `127.0.0.1`. `sharp` (optional) provides thumbnails and colour extraction.
 
 ## Project layout
 
 ```
-server/   index.js (HTTP API + SSE) · library.js (folder watcher) · analyzer.js (Claude vision)
-          taste.js (stats, taste synthesis, Markdown exports) · prompts.js · schema.js · images.js · store.js
-mcp/      server.js (MCP server for Claude Desktop / Claude Code)
+server/   index.js (API + SSE) · library.js (folder watcher) · organize.js (inbox + sidecars) · analyzer.js (Claude vision)
+          sections.js (sections, facets, media, kit roles) · playbooks.js (per-medium execution + tokens)
+          prompts.js (briefs, kits, index) · taste.js (stats, taste, exports) · schema.js · images.js · store.js · config.js
+mcp/      server.js
+scripts/  inspo.js (CLI) · capture.js (links → inbox) · install-skill.js
 public/   index.html · styles.css · app.js (no build step)
+.claude/skills/inspo/   SKILL.md · references/analysis-guide.md
 ```

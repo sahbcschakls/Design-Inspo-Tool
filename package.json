@@ -1,13 +1,16 @@
 {
   "name": "inspo-library",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Local design inspiration library that turns a folder of references into a Claude-ready style guide.",
+  "description": "A visual design-inspiration library that turns references into executable styles and kits for Claude.",
   "scripts": {
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "mcp": "node mcp/server.js"
+    "mcp": "node mcp/server.js",
+    "inspo": "node scripts/inspo.js",
+    "capture": "node scripts/capture.js",
+    "skill:install": "node scripts/install-skill.js"
   },
   "engines": {
     "node": ">=18.17"

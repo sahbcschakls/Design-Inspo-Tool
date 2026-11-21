@@ -35,6 +35,7 @@ export function getConfig() {
   );
   const apiKey = local.apiKey || process.env.ANTHROPIC_API_KEY || '';
   const autoAnalyze = local.autoAnalyze ?? (process.env.AUTO_ANALYZE ?? 'true') !== 'false';
+  const autoOrganize = local.autoOrganize ?? (process.env.AUTO_ORGANIZE ?? 'true') !== 'false';
   return {
     libraryDir,
     dataDir: path.join(libraryDir, '.inspo'),
@@ -42,6 +43,7 @@ export function getConfig() {
     aiEnabled: Boolean(apiKey || process.env.ANTHROPIC_AUTH_TOKEN),
     model: local.model || process.env.INSPO_MODEL || DEFAULT_MODEL,
     autoAnalyze,
+    autoOrganize,
     port: Number(process.env.PORT || 4545),
   };
 }

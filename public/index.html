@@ -29,10 +29,13 @@
     </div>
 
     <nav class="tabs" role="tablist">
-      <button class="tab is-active" data-view="library" role="tab">Library</button>
-      <button class="tab" data-view="taste" role="tab">Taste</button>
-      <button class="tab" data-view="connect" role="tab">Connect Claude</button>
+      <button class="tab is-active" data-view="library" role="tab"><span>Gallery</span><span class="tab__k mono">G</span></button>
+      <button class="tab" data-view="kits" role="tab"><span>Kits</span><span class="tab__k mono" id="kitCount"></span></button>
+      <button class="tab" data-view="taste" role="tab"><span>Taste</span></button>
+      <button class="tab" data-view="connect" role="tab"><span>Connect Claude</span></button>
     </nav>
+
+    <nav class="sections" id="sections" aria-label="Sections"></nav>
 
     <div class="filters" id="filters"></div>
 
@@ -56,6 +59,7 @@
         <input id="search" type="search" placeholder="Search styles, tags, colours, fonts…" autocomplete="off" />
         <kbd class="mono">/</kbd>
       </label>
+      <button class="btn cmdk" id="cmdkBtn" title="Command palette">Jump to… <kbd class="mono">⌘K</kbd></button>
       <div class="topbar__right">
         <label class="select">
           <span class="mono label">Sort</span>
@@ -77,15 +81,18 @@
         <button class="btn" id="analyzeBtn" hidden>Analyse <span id="pendingCount">0</span></button>
         <label class="btn btn--ink" for="fileInput">＋ Add references</label>
         <input type="file" id="fileInput" accept="image/*" multiple hidden />
+        <button class="btn btn--accent" id="execBtn" title="Turn your active styles into a finished deliverable">Execute ⟶</button>
       </div>
     </header>
 
     <section class="view" id="view-library">
+      <header class="shero" id="hero"></header>
       <div class="statusline mono" id="statusline"></div>
       <div class="grid" id="grid"></div>
       <div class="empty" id="empty" hidden></div>
     </section>
 
+    <section class="view" id="view-kits" hidden></section>
     <section class="view" id="view-taste" hidden></section>
     <section class="view" id="view-connect" hidden></section>
   </main>
@@ -94,6 +101,15 @@
 
   <dialog class="detail" id="detail"></dialog>
   <dialog class="settings" id="settings"></dialog>
+  <dialog class="settings kitdlg" id="kitDialog"></dialog>
+  <dialog class="settings execdlg" id="execDialog"></dialog>
+  <dialog class="cmdpal" id="palette">
+    <div class="cmdpal__box">
+      <input id="paletteInput" placeholder="Jump to a style, kit, section or action…" autocomplete="off" />
+      <div class="cmdpal__list" id="paletteList" role="listbox"></div>
+      <div class="cmdpal__foot mono"><span>↑↓ move</span><span>↵ open</span><span>esc close</span></div>
+    </div>
+  </dialog>
 
   <div class="drop" id="drop" hidden>
     <div class="drop__inner">

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 
-const EMPTY = () => ({ version: 1, styles: {}, taste: null, updatedAt: null });
+const EMPTY = () => ({ version: 1, styles: {}, kits: {}, taste: null, updatedAt: null });
 
 export class Store extends EventEmitter {
   constructor(dataDir) {
@@ -19,7 +19,7 @@ export class Store extends EventEmitter {
   read() {
     try {
       const data = JSON.parse(fs.readFileSync(this.file, 'utf8'));
-      return { ...EMPTY(), ...data, styles: data.styles || {} };
+      return { ...EMPTY(), ...data, styles: data.styles || {}, kits: data.kits || {} };
     } catch {
       return EMPTY();
     }
@@ -56,6 +56,10 @@ export class Store extends EventEmitter {
       data.styles[id] = { ...current, ...patch };
       return data.styles[id];
     });
+  }
+
+  listKits() {
+    return Object.values(this.read().kits).sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   }
 
   // Styles that still have a file on disk, newest first.
