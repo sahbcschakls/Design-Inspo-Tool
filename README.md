@@ -65,6 +65,23 @@ Once a reference in `_inbox` is analysed, it is filed into its section folder to
 
 Capturing links needs Playwright once: `npm i -D playwright && npx playwright install chromium`, then `npm run capture -- <url> "instructions"` (Pinterest pins save the pin image; other sites save a screenshot; add `--full` for a full-page shot).
 
+## Hosting the web view (Vercel)
+
+The app itself runs on your computer, because it reads and watches your folder. To browse the library from anywhere, publish a **read-only web view**: the same gallery, sections, search, ⌘K, kits and Execute, built from a snapshot of your library. Briefs and tokens are generated in the browser.
+
+1. Import this repository at [vercel.com/new](https://vercel.com/new). `vercel.json` already sets the build (no settings to change, no environment variables). The first deploy shows demo data.
+2. Publish your own library from your computer:
+
+   ```bash
+   npm run site:export      # snapshots INSPO_DIR into site/ (add --ready to skip unanalysed items)
+   npm run site:preview     # optional: check it at http://localhost:4646
+   git add site && git commit -m "Update inspo snapshot" && git push
+   ```
+
+   Every push redeploys automatically.
+
+The snapshot contains your images (resized), style analyses, notes and kits, but no paths from your computer and no API key. A Vercel deployment is public unless you turn on **Deployment Protection** in the project settings, so do that if the library should stay private.
+
 ## Why a folder rather than Figma as the source of truth
 
 The folder plus `library.json` is what Claude reads and writes reliably: plain files, versionable, readable without any connector. Figma is a better *output* than a database. Use the `figma` medium to execute kits into a Figma file, or ask Claude to lay out a kit as a moodboard page there. If you keep a Figma file of inspo, export frames into `_inbox/` and they join the library like anything else.
@@ -89,7 +106,8 @@ server/   index.js (API + SSE) · library.js (folder watcher) · organize.js (in
           sections.js (sections, facets, media, kit roles) · playbooks.js (per-medium execution + tokens)
           prompts.js (briefs, kits, index) · taste.js (stats, taste, exports) · schema.js · images.js · store.js · config.js
 mcp/      server.js
-scripts/  inspo.js (CLI) · capture.js (links → inbox) · install-skill.js
+scripts/  inspo.js (CLI) · capture.js (links → inbox) · install-skill.js · export-site.js / build-site.js / preview-site.js (web view)
+site/     the published snapshot (data, thumbs, media) · vercel.json builds it into dist/
 public/   index.html · styles.css · app.js (no build step)
 .claude/skills/inspo/   SKILL.md · references/analysis-guide.md
 ```

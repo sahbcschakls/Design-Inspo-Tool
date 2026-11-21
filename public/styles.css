@@ -633,3 +633,9 @@ textarea.notes:focus, .field input:focus, .field textarea:focus, .field select:f
   .part { grid-template-columns: 40px 1fr auto; }
   .part select { grid-column: 2 / -1; }
 }
+
+/* Hosted read-only web view: hide everything that edits the library. */
+.is-static [data-fav], .is-static [data-edit], .is-static [data-analyze], .is-static [data-reveal], .is-static [data-trash],
+.is-static label[for='fileInput'], .is-static #analyzeBtn, .is-static #settingsBtn, .is-static [data-kit-new],
+.is-static .kit .iconbtn[data-kit-edit], .is-static .detail__org, .is-static [data-rebuild] { display: none !important; }
+.is-static .folder { cursor: default; }

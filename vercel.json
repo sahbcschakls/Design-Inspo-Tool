@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "echo 'The web view needs no dependencies'",
+  "buildCommand": "node scripts/build-site.js",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/thumbs/:id", "destination": "/thumbs/:id.webp" },
+    { "source": "/media/:id", "destination": "/media/:id.webp" }
+  ],
+  "headers": [
+    { "source": "/thumbs/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+    { "source": "/media/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
+    { "source": "/data/(.*)", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+  ]
+}

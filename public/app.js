@@ -29,7 +29,45 @@ const state = {
 };
 
 // ---------- API ----------
+// The hosted web view (npm run site:build) has no server: it reads a snapshot from
+// /data/library.json and builds briefs in the browser with the same modules the server uses.
+const STATIC = Boolean(window.INSPO_STATIC);
+const READ_ONLY = 'This is the read-only web view. Add and edit references in the local app.';
+let snapshot = null;
+const picked = () => new Set(JSON.parse(store.get('inspo-picked', '[]')));
+
+async function staticApi(path, opts = {}) {
+  if (path === '/api/library') {
+    snapshot ||= await (await fetch('/data/library.json', { cache: 'no-cache' })).json();
+    const on = picked();
+    return { ...snapshot, styles: snapshot.styles.map((s) => ({ ...s, pinned: on.has(s.id) })), stats: { ...snapshot.stats, pinned: on.size } };
+  }
+  if (path === '/api/active') {
+    const on = picked();
+    const { id, pinned } = opts.body;
+    if (id === '*') on.clear(); else if (pinned) on.add(id); else on.delete(id);
+    store.set('inspo-picked', JSON.stringify([...on]));
+    if (id === '*') state.styles.forEach((s) => { s.pinned = false; });
+    return { ok: true };
+  }
+  const [prompts, play] = await Promise.all([import('/lib/prompts.js'), import('/lib/playbooks.js')]);
+  if (path === '/api/taste.md') return prompts.tasteToMarkdown(state.taste, state.stats);
+  if (path === '/api/prompt') {
+    const { ids, kitId, content, task } = opts.body || {};
+    let { medium } = opts.body || {};
+    const kit = kitId ? state.kits.find((k) => k.id === kitId) : null;
+    const styles = (kit ? kit.parts.map((x) => x.styleId) : ids || []).map(byId).filter(Boolean);
+    if (!styles.length) throw new Error('No styles selected');
+    medium = medium || kit?.medium || null;
+    if (medium && !play.PLAYBOOKS[medium]) medium = null;
+    const tokens = play.buildTokens(styles.map((st) => ({ style: st, role: kit?.parts.find((x) => x.styleId === st.id)?.role || null })));
+    return { prompt: prompts.bundlePrompt(styles, { taste: state.taste, task, medium, content, kit }), css: play.tokensToCss(tokens), json: play.tokensToJson(tokens) };
+  }
+  throw new Error(READ_ONLY);
+}
+
 async function api(path, opts = {}) {
+  if (STATIC) return staticApi(path, opts);
   const res = await fetch(path, {
     ...opts,
     headers: opts.body && !(opts.body instanceof Blob) && !(opts.body instanceof ArrayBuffer) ? { 'Content-Type': 'application/json', ...opts.headers } : opts.headers,
@@ -58,6 +96,9 @@ function renumber() {
   const order = [...state.styles].sort((a, b) => (a.addedAt || '').localeCompare(b.addedAt || '') || a.id.localeCompare(b.id));
   numbers = new Map(order.map((s, i) => [s.id, String(i + 1).padStart(3, '0')]));
 }
+const pinLabel = (s) => (STATIC
+  ? (s.pinned ? '<span class="spark">✓</span> Selected' : '<span class="spark">✳</span> Select for brief')
+  : (s.pinned ? '<span class="spark">✓</span> In Claude' : '<span class="spark">✳</span> Add to Claude'));
 const catalogNo = (s) => numbers.get(s.id) || '—';
 const colorsOf = (s) => (s.colors?.length ? s.colors : (s.localColors || []).map((c) => ({ hex: c.hex.toUpperCase(), name: '', role: '' })));
 
@@ -198,7 +239,7 @@ function renderFilters() {
     `<div class="fgroup"><div class="flist">
       ${item('show', 'all', 'Everything', counts.all)}
       ${item('show', 'favorites', '★ Favourites', counts.favorites)}
-      ${item('show', 'active', '✳ Active in Claude', counts.active)}
+      ${item('show', 'active', STATIC ? '✳ Selected' : '✳ Active in Claude', counts.active)}
       ${counts.pending ? item('show', 'pending', 'Needs analysis', counts.pending) : ''}
     </div></div>`,
     stats.facets?.length ? group('Borrow its…', 'facet', `<div class="chips">${stats.facets.map((x) =>
@@ -236,7 +277,7 @@ function cardHTML(s) {
       <img src="/thumbs/${s.id}" alt="" loading="lazy" decoding="async" style="aspect-ratio:${ratio}"${tall ? ' class="is-tall"' : ''} />
       <span class="glare" aria-hidden="true"></span>
       <span class="card__no mono">No. ${catalogNo(s)}</span>
-      ${s.pinned ? '<span class="card__flag mono">In Claude</span>' : ''}
+      ${s.pinned ? `<span class="card__flag mono">${STATIC ? 'Selected' : 'In Claude'}</span>` : ''}
       ${status}
     </button>
     <div class="card__body">
@@ -252,7 +293,7 @@ function cardHTML(s) {
       ${s.facets?.length ? `<div class="facets">${s.facets.map((x) => `<span>${esc(x)}</span>`).join('')}</div>` : ''}
       ${s.tags?.length ? `<div class="tags">${s.tags.slice(0, 4).map((t) => `<span>${esc(t)}</span>`).join('')}</div>` : ''}
       <div class="card__actions">
-        <button class="cta${s.pinned ? ' is-on' : ''}" data-pin>${s.pinned ? '<span class="spark">✓</span> In Claude' : '<span class="spark">✳</span> Add to Claude'}</button>
+        <button class="cta${s.pinned ? ' is-on' : ''}" data-pin>${pinLabel(s)}</button>
         <button class="iconbtn" data-copy title="Copy this style as a prompt" aria-label="Copy prompt">⧉</button>
       </div>
     </div>`;
@@ -298,7 +339,12 @@ function renderGrid() {
   while (grid.children.length > list.length) grid.lastElementChild.remove();
 
   const empty = $('#empty');
-  if (!state.styles.length || (!list.length && state.section !== 'all' && !state.q && !activeFilters())) {
+  if (STATIC && (!state.styles.length || (!list.length && state.section !== 'all' && !state.q && !activeFilters()))) {
+    empty.hidden = false;
+    empty.innerHTML = state.styles.length
+      ? `<h2>Nothing in ${esc(sectionMeta(state.section).label)} yet.</h2><p>Add references to this section in the local app, then publish a new snapshot.</p>`
+      : `<h2>This web view is empty.</h2><p>On your computer, in the app folder, run <code>npm run site:export</code>, commit the <code>site/</code> folder and push. The hosted view rebuilds with your library.</p>`;
+  } else if (!state.styles.length || (!list.length && state.section !== 'all' && !state.q && !activeFilters())) {
     const sec = sectionMeta(state.section);
     empty.hidden = false;
     empty.innerHTML = `
@@ -314,9 +360,10 @@ function renderGrid() {
 
   const { stats } = state;
   const status = [`<span><b>${list.length}</b> of ${state.styles.length} references</span>`];
+  if (STATIC && snapshot?.demo) status.unshift('<span class="live">Demo data · run npm run site:export to publish your library</span>');
   if (stats.pinned) status.push(`<span><b>${stats.pinned}</b> active in Claude</span>`);
   if (state.queue) status.push(`<span class="live">Analysing ${state.queue}</span>`);
-  else if (stats.pending && !state.config.aiEnabled) status.push(`<span>${stats.pending} waiting — add an API key in Settings or ask Claude to analyse them over MCP</span>`);
+  else if (stats.pending && !state.config.aiEnabled && !STATIC) status.push(`<span>${stats.pending} waiting — add an API key in Settings or ask Claude to analyse them over MCP</span>`);
   $('#statusline').innerHTML = status.join('');
 }
 
@@ -328,7 +375,7 @@ function renderTray() {
   tray.hidden = false;
   tray.innerHTML = `
     <div class="tray__stack">${active.slice(0, 5).map((s) => `<button data-open-id="${s.id}" title="${esc(s.styleName || s.fileName)}"><img src="/thumbs/${s.id}" alt="" /></button>`).join('')}</div>
-    <div class="tray__text"><b>${active.length} style${active.length > 1 ? 's' : ''} active in Claude</b><span class="mono">Live over MCP · ${esc(active.map((s) => s.styleName || s.fileName).join(', '))}</span></div>
+    <div class="tray__text"><b>${active.length} style${active.length > 1 ? 's' : ''} ${STATIC ? 'selected' : 'active in Claude'}</b><span class="mono">${STATIC ? 'Execute or copy a brief' : 'Live over MCP'} · ${esc(active.map((s) => s.styleName || s.fileName).join(', '))}</span></div>
     <button class="btn btn--accent btn--sm" data-tray-copy>Copy brief</button>
     <button class="btn btn--sm" data-tray-clear>Clear</button>`;
 }
@@ -399,7 +446,7 @@ function detailHTML(s) {
       <h2 class="detail__title">${esc(s.styleName || s.fileName)}</h2>
       ${s.description ? `<p class="detail__desc">${esc(s.description)}</p>` : ''}
       <div class="detail__actions">
-        <button class="cta${s.pinned ? ' is-on' : ''}" data-pin>${s.pinned ? '<span class="spark">✓</span> In Claude' : '<span class="spark">✳</span> Add to Claude'}</button>
+        <button class="cta${s.pinned ? ' is-on' : ''}" data-pin>${pinLabel(s)}</button>
         <button class="btn btn--sm btn--accent" data-exec-style>Execute ⟶</button>
         <button class="btn btn--sm" data-copy>Copy prompt</button>
         <button class="btn btn--sm" data-fav>${s.favorite ? '★ Favourite' : '☆ Favourite'}</button>
@@ -436,7 +483,7 @@ function detailHTML(s) {
       ${s.doUse?.length || s.avoid?.length ? sect('Do / avoid', `<div class="two"><div>${bullets(s.doUse || [], 'do')}</div><div>${bullets(s.avoid || [], 'dont')}</div></div>`) : ''}
       ${s.mood?.length || s.tags?.length ? sect('Mood & keywords', `<div class="chips">${[...(s.mood || []), ...(s.tags || [])].map((x) => `<button class="fchip" data-tag-filter="${esc(x)}">${esc(x)}</button>`).join('')}</div>`) : ''}
       ${s.promptSnippet ? sect('Prompt', `<pre class="prompt">${esc(s.promptSnippet)}</pre>`, `<button class="ghost" style="padding:0;font-size:12px;text-transform:none;letter-spacing:0" data-copy>Copy full prompt</button>`) : ''}
-      ${sect('My notes', `<textarea class="notes" rows="3" data-notes placeholder="Why you saved this, where to use it… (Claude sees these notes)">${esc(s.notes || '')}</textarea>`)}
+      ${STATIC ? (s.notes ? sect('My notes', `<p>${esc(s.notes)}</p>`) : '') : sect('My notes', `<textarea class="notes" rows="3" data-notes placeholder="Why you saved this, where to use it… (Claude sees these notes)">${esc(s.notes || '')}</textarea>`)}
       ${sect('File', `<dl class="kv">
         <dt>Name</dt><dd>${esc(s.file)}</dd>
         ${s.width ? `<dt>Size</dt><dd>${s.width} × ${s.height}px · ${fmtSize(s.size)}</dd>` : ''}
@@ -812,9 +859,9 @@ function paletteSource() {
       hay: [s.styleName, s.fileName, s.type, s.sectionId, ...(s.tags || []), ...(s.mood || []), ...(s.facets || []), ...(s.typography || []).map((t) => t.family)].join(' '),
       run: () => { go({ view: 'library' }); openDetail(s.id); } });
   }
-  items.push({ kind: 'Action', label: 'Add references', glyph: '＋', hay: 'add upload import references', run: () => $('#fileInput').click() });
+  if (!STATIC) items.push({ kind: 'Action', label: 'Add references', glyph: '＋', hay: 'add upload import references', run: () => $('#fileInput').click() });
   items.push({ kind: 'Action', label: 'Execute with active styles', glyph: '⟶', hay: 'execute build make active brief', run: () => $('#execBtn').click() });
-  items.push({ kind: 'Action', label: 'New kit', glyph: '＋', hay: 'new kit create', run: () => openKitDialog() });
+  if (!STATIC) items.push({ kind: 'Action', label: 'New kit', glyph: '＋', hay: 'new kit create', run: () => openKitDialog() });
   items.push({ kind: 'Action', label: 'Toggle theme', glyph: '◐', hay: 'theme dark light', run: () => $('#themeBtn').click() });
   items.push({ kind: 'Action', label: 'Copy “process my inbox” request', glyph: '⧉', hay: 'process inbox claude analyse', run: () => copy('Process my inspo inbox: catalogue the new references, follow their instructions, file them and suggest kits.', 'Request copied, paste it into Claude') });
   return items;
@@ -874,7 +921,7 @@ document.addEventListener('click', async (e) => {
     if (t.id === 'cmdkBtn') return openPalette();
     if (t.dataset.pal) return runPalette(Number(t.dataset.pal));
     if (t.hasAttribute('data-kit-new')) return openKitDialog();
-    if (t.hasAttribute('data-kit-edit') && kitEl) return openKitDialog(state.kits.find((k) => k.id === kitEl.dataset.kit));
+    if (t.hasAttribute('data-kit-edit') && kitEl) return STATIC ? openExec({ kitId: kitEl.dataset.kit }) : openKitDialog(state.kits.find((k) => k.id === kitEl.dataset.kit));
     if (t.hasAttribute('data-kit-exec') && kitEl) return openExec({ kitId: kitEl.dataset.kit });
     if (t.hasAttribute('data-kit-cancel')) return $('#kitDialog').close();
     if (t.dataset.partAdd) {
@@ -988,7 +1035,7 @@ function render() {
   $('#kitCount').textContent = state.kits.length || '';
   $$('.view').forEach((v) => (v.hidden = v.id !== `view-${state.view}`));
   $('#brandCount').textContent = `${state.styles.length} references`;
-  $('#folderPath').textContent = state.config.libraryDir;
+  $('#folderPath').textContent = STATIC ? (snapshot?.exportedAt ? `Snapshot of ${fmtDate(snapshot.exportedAt)}${snapshot.demo ? ' · demo data' : ''}` : 'No snapshot yet') : state.config.libraryDir;
   const pending = state.stats.pending + state.styles.filter((s) => s.status === 'error').length;
   $('#analyzeBtn').hidden = !(state.config.aiEnabled && pending && !state.queue);
   $('#pendingCount').textContent = pending;
@@ -1021,8 +1068,8 @@ async function togglePin(id) {
     if (pinned) {
       const brief = await activeBrief();
       const n = state.styles.filter((x) => x.pinned).length;
-      copy(brief, `Added to Claude: ${n} active style${n > 1 ? 's' : ''}, brief copied`);
-    } else toast('Removed from Claude');
+      copy(brief, STATIC ? `${n} style${n > 1 ? 's' : ''} selected, brief copied` : `Added to Claude: ${n} active style${n > 1 ? 's' : ''}, brief copied`);
+    } else toast(STATIC ? 'Removed from your selection' : 'Removed from Claude');
   } catch (e) { s.pinned = !pinned; render(); fail(e); }
 }
 
@@ -1034,12 +1081,14 @@ async function copyStyle(id) {
 }
 
 async function patchStyle(id, body) {
+  if (STATIC) throw new Error(READ_ONLY);
   const updated = await api(`/api/styles/${id}`, { method: 'PATCH', body });
   Object.assign(byId(id), updated);
   render();
 }
 
 async function uploadFiles(files) {
+  if (STATIC) return toast(READ_ONLY);
   const images = [...files].filter((f) => f.type.startsWith('image/') || /\.(png|jpe?g|webp|gif|avif|svg|heic|tiff?)$/i.test(f.name));
   if (!images.length) return toast('Only image files can be added', { error: true });
   const collection = uploadTarget();
@@ -1158,7 +1207,7 @@ document.addEventListener('click', async (e) => {
       toast(`Analysing ${queued} reference${queued === 1 ? '' : 's'}…`);
       return refresh();
     }
-    if (t.id === 'settingsBtn' || t.id === 'folderBtn') return openSettings();
+    if ((t.id === 'settingsBtn' || t.id === 'folderBtn') && !STATIC) return openSettings();
     if (t.hasAttribute('data-close-settings')) return $('#settings').close();
     if (t.id === 'themeBtn') {
       const dark = document.documentElement.dataset.theme
@@ -1211,7 +1260,7 @@ document.addEventListener('submit', async (e) => {
 });
 
 document.addEventListener('focusout', async (e) => {
-  if (!e.target.matches('[data-notes]')) return;
+  if (!e.target.matches('[data-notes]') || STATIC) return;
   const s = byId(state.detailId);
   if (!s || s.notes === e.target.value) return;
   try { await patchStyle(s.id, { notes: e.target.value }); toast('Notes saved'); } catch (err) { fail(err); }
@@ -1239,7 +1288,7 @@ document.addEventListener('keydown', (e) => {
 let dragDepth = 0;
 const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
 window.addEventListener('dragenter', (e) => {
-  if (!hasFiles(e)) return;
+  if (!hasFiles(e) || STATIC) return;
   dragDepth++;
   $('#drop').hidden = false;
   $('#dropTarget').textContent = `into ${uploadTarget()}/ — Claude turns it into a style`;
@@ -1247,7 +1296,7 @@ window.addEventListener('dragenter', (e) => {
 window.addEventListener('dragleave', (e) => { if (hasFiles(e) && --dragDepth <= 0) { dragDepth = 0; $('#drop').hidden = true; } });
 window.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
 window.addEventListener('drop', (e) => {
-  if (!hasFiles(e)) return;
+  if (!hasFiles(e) || STATIC) return;
   e.preventDefault();
   dragDepth = 0;
   $('#drop').hidden = true;
@@ -1268,10 +1317,15 @@ window.addEventListener('resize', () => cardCache.forEach(({ el }) => sizeCard(e
 
 // Live updates from the server (folder changes, analysis progress, MCP writes).
 function connectEvents() {
+  if (STATIC) return;
   const es = new EventSource('/api/events');
   es.addEventListener('library', scheduleRefresh);
   es.onerror = () => {};
 }
 
+if (STATIC) {
+  document.body.classList.add('is-static');
+  $('#folderBtn .label').textContent = 'Web view · read-only';
+}
 refresh().catch(fail);
 connectEvents();

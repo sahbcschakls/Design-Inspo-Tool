@@ -10,7 +10,10 @@
     "mcp": "node mcp/server.js",
     "inspo": "node scripts/inspo.js",
     "capture": "node scripts/capture.js",
-    "skill:install": "node scripts/install-skill.js"
+    "skill:install": "node scripts/install-skill.js",
+    "site:export": "node scripts/export-site.js",
+    "site:build": "node scripts/build-site.js",
+    "site:preview": "node scripts/build-site.js && node scripts/preview-site.js"
   },
   "engines": {
     "node": ">=18.17"
